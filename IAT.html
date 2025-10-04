@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Angle Trisection with JSXGraph</title>
+    <link rel="stylesheet" type="text/css" href="https://jsxgraph.uni-bayreuth.de/distrib/jsxgraph.css" />
+    <script type="text/javascript" src="https://jsxgraph.uni-bayreuth.de/distrib/jsxgraphcore.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .board-container {
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .controls {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+        }
+        .controls h3 {
+            margin-top: 0;
+            color: #555;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.working {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .description {
+            margin: 20px 0;
+            line-height: 1.6;
+            color: #666;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .info-panel {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .angle-info {
+            padding: 10px;
+            background-color: #e9ecef;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Interactive Angle Trisection Construction</h1>
+        
+        <div class="description">
+            <p><strong>Construction Algorithm:</strong> This interactive demonstration implements the angle trisection method described in the document. 
+            The construction uses the trigonometric identity and compass-straightedge techniques to find when CJ = HI, 
+            indicating that angle ACB = (1/3) × angle KCB.</p>
+            
+            <p><strong>Instructions:</strong> 
+            1. Adjust the angle KCB using the slider or by dragging point K
+            2. Point A is fixed at unit distance (AB = 1) perpendicular to CB
+            3. The construction will automatically update all dependent elements
+            4. When CJ equals HI (shown in status), the trisection is achieved</p>
+        </div>
+
+        <div class="controls">
+            <h3>Controls</h3>
+            <button onclick="resetConstruction()">Reset Construction</button>
+            <button onclick="randomAngle()">Random Angle</button>
+            <button onclick="toggleAnimation()">Toggle Animation</button>
+        </div>
+
+        <div id="status" class="status working">
+            Status: Adjusting construction...
+        </div>
+
+        <div class="board-container">
+            <div id="jxgbox" class="jxgbox" style="width:800px; height:600px;"></div>
+        </div>
+
+        <div class="info-panel">
+            <div class="angle-info">
+                <h4>Original Angle</h4>
+                <div id="original-angle">Angle KCB: --°</div>
+            </div>
+            <div class="angle-info">
+                <h4>Trisected Angle</h4>
+                <div id="trisected-angle">Angle ACB: --°</div>
+            </div>
+        </div>
+
+        <div class="angle-info">
+            <h4>Verification</h4>
+            <div id="verification">CJ = --, HI = --, Difference: --</div>
+        </div>
+
+        <div class="angle-info">
+            <h4>Measurements</h4>
+            <div id="measurements">AB = 1 (fixed), CK = 1 (fixed)</div>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        // Global variables
+        let board;
+        let points = {};
+        let lines = {};
+        let angles = {};
+        let isAnimating = false;
+        let animationId;
+
+        // Initialize the construction
+        function initConstruction() {
+            // Create the JSXGraph board
+            board = JXG.JSXGraph.initBoard('jxgbox', {
+                boundingbox: [-2, 8, 12, -2],
+                axis: true,
+                showCopyright: false,
+                showNavigation: true,
+                zoom: true,
+                pan: true
+            });
+
+            // Create base points B and C
+            points.B = board.create('point', [0, 0], {
+                name: 'B', 
+                fixed: true, 
+                size: 4, 
+                fillColor: 'blue'
+            });
+            
+            points.C = board.create('point', [6, 0], {
+                name: 'C', 
+                size: 4, 
+                fillColor: 'blue'
+            });
+
+            // Create fixed point A perpendicular to CB at unit distance from B
+            // A is FIXED at (0, 1) - exactly 1 unit above B
+            points.A = board.create('point', [0, 1], {
+                name: 'A',
+                size: 4,
+                fillColor: 'purple',
+                fixed: true  // A is completely fixed
+            });
+
+            // Draw the base line CB
+            lines.CB = board.create('line', [points.C, points.B], {
+                name: 'CB',
+                strokeWidth: 2
+            });
+
+            // Draw perpendicular line BA (for visual reference)
+            lines.BA = board.create('segment', [points.B, points.A], {
+                name: 'BA',
+                strokeWidth: 2,
+                strokeColor: 'purple'
+            });
+
+            // Create point K on a circle of radius 1 from C
+            let circleC = board.create('circle', [points.C, 1], {
+                visible: false
+            });
+            
+            points.K = board.create('point', [7, 0.8], {
+                name: 'K',
+                size: 4,
+                fillColor: 'red'
+            });
+            
+            // Constrain K to the unit circle (CK = 1)
+            points.K.makeGlider(circleC);
+
+            // Draw CK
+            lines.CK = board.create('segment', [points.C, points.K], {
+                name: 'CK',
+                strokeWidth: 2,
+                strokeColor: 'red'
+            });
+
+            // Create perpendicular KJ from K to CB
+            lines.perpKJ = board.create('perpendicular', [lines.CB, points.K], {
+                strokeColor: 'green',
+                dash: 1
+            });
+            
+            points.J = board.create('intersection', [lines.perpKJ, lines.CB], {
+                name: 'J',
+                size: 3,
+                fillColor: 'green'
+            });
+
+            // Create triangle ACB
+            lines.AC = board.create('segment', [points.A, points.C], {
+                name: 'AC',
+                strokeWidth: 2,
+                strokeColor: 'purple'
+            });
+
+            // Create perpendicular BD from B to AC
+            lines.perpBD = board.create('perpendicular', [lines.AC, points.B], {
+                strokeColor: 'orange',
+                dash: 2
+            });
+            
+            points.D = board.create('intersection', [lines.perpBD, lines.AC], {
+                name: 'D',
+                size: 3,
+                fillColor: 'orange'
+            });
+
+            // Extend BD to G such that BG = 3*BD
+            points.G = board.create('point', [
+                function() { 
+                    let dx = points.D.X() - points.B.X();
+                    let dy = points.D.Y() - points.B.Y();
+                    return points.B.X() + 3 * dx;
+                },
+                function() { 
+                    let dx = points.D.X() - points.B.X();
+                    let dy = points.D.Y() - points.B.Y();
+                    return points.B.Y() + 3 * dy;
+                }
+            ], {
+                name: 'G',
+                size: 3,
+                fillColor: 'brown'
+            });
+
+            lines.BG = board.create('segment', [points.B, points.G], {
+                strokeWidth: 2,
+                strokeColor: 'brown'
+            });
+
+            // Create perpendicular DE from D to CB
+            lines.perpDE = board.create('perpendicular', [lines.CB, points.D], {
+                strokeColor: 'teal',
+                dash: 1
+            });
+            
+            points.E = board.create('intersection', [lines.perpDE, lines.CB], {
+                name: 'E',
+                size: 3,
+                fillColor: 'teal'
+            });
+
+            // Create perpendicular EF from E to AC
+            lines.perpEF = board.create('perpendicular', [lines.AC, points.E], {
+                strokeColor: 'navy',
+                dash: 2
+            });
+            
+            points.F = board.create('intersection', [lines.perpEF, lines.AC], {
+                name: 'F',
+                size: 3,
+                fillColor: 'navy'
+            });
+
+            // Extend EF to I such that EI = 4*EF
+            points.I = board.create('point', [
+                function() { 
+                    let dx = points.F.X() - points.E.X();
+                    let dy = points.F.Y() - points.E.Y();
+                    return points.E.X() + 4 * dx;
+                },
+                function() { 
+                    let dx = points.F.X() - points.E.X();
+                    let dy = points.F.Y() - points.E.Y();
+                    return points.E.Y() + 4 * dy;
+                }
+            ], {
+                name: 'I',
+                size: 3,
+                fillColor: 'maroon'
+            });
+
+            lines.EI = board.create('segment', [points.E, points.I], {
+                strokeWidth: 2,
+                strokeColor: 'maroon'
+            });
+
+            // Create line GH parallel to CB
+            lines.GH = board.create('parallel', [lines.CB, points.G], {
+                strokeColor: 'darkgreen',
+                strokeWidth: 2
+            });
+
+            // Find intersection H of GH and EI
+            points.H = board.create('intersection', [lines.GH, lines.EI], {
+                name: 'H',
+                size: 3,
+                fillColor: 'darkgreen'
+            });
+
+            // Create angles
+            angles.KCB = board.create('angle', [points.K, points.C, points.B], {
+                name: 'α',
+                radius: 0.8,
+                fillColor: 'lightblue',
+                fillOpacity: 0.3
+            });
+
+            angles.ACB = board.create('angle', [points.A, points.C, points.B], {
+                name: 'α/3',
+                radius: 0.5,
+                fillColor: 'lightgreen',
+                fillOpacity: 0.5
+            });
+
+            // Add visual indicators for unit lengths
+            board.create('text', [0.2, 0.5, 'AB = 1'], {
+                fontSize: 12,
+                color: 'purple'
+            });
+
+            board.create('text', [
+                function() { return (points.C.X() + points.K.X()) / 2; },
+                function() { return (points.C.Y() + points.K.Y()) / 2 + 0.2; },
+                'CK = 1'
+            ], {
+                fontSize: 12,
+                color: 'red'
+            });
+
+            // Add update function
+            board.on('update', updateDisplay);
+            
+            // Initial update
+            updateDisplay();
+        }
+
+        // Update display information
+        function updateDisplay() {
+            // Calculate distances
+            let CJ = Math.sqrt(Math.pow(points.C.X() - points.J.X(), 2) + 
+                              Math.pow(points.C.Y() - points.J.Y(), 2));
+            let HI = Math.sqrt(Math.pow(points.H.X() - points.I.X(), 2) + 
+                              Math.pow(points.H.Y() - points.I.Y(), 2));
+            
+            let difference = Math.abs(CJ - HI);
+            
+            // Calculate angles in degrees
+            let angleKCB = angles.KCB.Value() * 180 / Math.PI;
+            let angleACB = angles.ACB.Value() * 180 / Math.PI;
+            
+            // Verify unit lengths
+            let AB = Math.sqrt(Math.pow(points.A.X() - points.B.X(), 2) + 
+                              Math.pow(points.A.Y() - points.B.Y(), 2));
+            let CK = Math.sqrt(Math.pow(points.C.X() - points.K.X(), 2) + 
+                              Math.pow(points.C.Y() - points.K.Y(), 2));
+            
+            // Update display
+            document.getElementById('original-angle').innerHTML = 
+                `Angle KCB: ${angleKCB.toFixed(2)}°`;
+            document.getElementById('trisected-angle').innerHTML = 
+                `Angle ACB: ${angleACB.toFixed(2)}°`;
+            document.getElementById('verification').innerHTML = 
+                `CJ = ${CJ.toFixed(4)}, HI = ${HI.toFixed(4)}, Difference: ${difference.toFixed(4)}`;
+            document.getElementById('measurements').innerHTML = 
+                `AB = ${AB.toFixed(4)} (fixed), CK = ${CK.toFixed(4)} (fixed)`;
+            
+            // Update status
+            let statusElement = document.getElementById('status');
+            if (difference < 0.01) {
+                statusElement.className = 'status success';
+                statusElement.innerHTML = '✓ Trisection achieved! CJ = HI (within tolerance)';
+            } else {
+                statusElement.className = 'status working';
+                statusElement.innerHTML = `⚡ Adjusting... Difference: ${difference.toFixed(4)}`;
+            }
+        }
+
+        // Reset construction
+        function resetConstruction() {
+            points.K.moveTo([7, 0.8]);
+            points.C.moveTo([6, 0]);
+            // Point A remains fixed at (0, 1)
+            board.update();
+        }
+
+        // Set random angle
+        function randomAngle() {
+            let angle = Math.random() * Math.PI/2; // Random angle < 90°
+            let x = points.C.X() + Math.cos(angle);
+            let y = points.C.Y() + Math.sin(angle);
+            points.K.moveTo([x, y]);
+            board.update();
+        }
+
+        // Toggle animation
+        function toggleAnimation() {
+            if (isAnimating) {
+                clearInterval(animationId);
+                isAnimating = false;
+            } else {
+                animationId = setInterval(() => {
+                    let t = Date.now() / 2000;
+                    let angle = Math.PI/4 + Math.PI/6 * Math.sin(t);
+                    let x = points.C.X() + Math.cos(angle);
+                    let y = points.C.Y() + Math.sin(angle);
+                    points.K.moveTo([x, y]);
+                    board.update();
+                }, 50);
+                isAnimating = true;
+            }
+        }
+
+        // Initialize when page loads
+        window.onload = function() {
+            initConstruction();
+        };
+    </script>
+</body>
+</html>
